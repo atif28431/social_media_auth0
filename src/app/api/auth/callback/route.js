@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+  if (!code) {
+    return NextResponse.json({ error: "No code provided" }, { status: 400 });
+  }
+
+  const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
+  const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
+  const AUTH0_CLIENT_SECRET = process.env.AUTH0_CLIENT_SECRET;
+  const redirectUri = `${
+    process.env.NEXTAUTH_URL || "http://localhost:3000"
+  }/api/auth/callback`;
+
+  // Exchange code for tokens
+  const tokenRes = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "authorization_code",
+      client_id: AUTH0_CLIENT_ID,
+      client_secret: AUTH0_CLIENT_SECRET,
+      code,
+      redirect_uri: redirectUri,
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    const error = await tokenRes.json();
+    return NextResponse.json(
+      { error: error.error_description || "Token exchange failed" },
+      { status: 500 }
+    );
+  }
+
+  const tokenData = await tokenRes.json();
+  // Set id_token in cookie (secure, httpOnly in production)
+  cookies().set("id_token", tokenData.id_token, {
+    path: "/",
+    httpOnly: false, // Set to true in production
+    secure: false, // Set to true in production
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7, // 1 week
+  });
+
+  // Redirect to home page
+  return NextResponse.redirect(
+    process.env.NEXTAUTH_URL || "http://localhost:3000"
+  );
+}
