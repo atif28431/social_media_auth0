@@ -22,16 +22,16 @@ export default function Navbar() {
     // IMPORTANT: Make sure this is the Instagram App ID, not the Facebook App ID
     // You can find this in the Facebook Developer Console under
     // Instagram Basic Display > Basic Display > Instagram App ID
-    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID;
+    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
     const redirectUri = `${window.location.origin}/instagram-callback`;
-    const scope = "user_profile,user_media";
+    const scope = "nstagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement";
     
     // Log the Instagram App ID for debugging
     console.log("Using Instagram App ID:", appId);
     console.log("Redirect URI:", redirectUri);
     
     // Construct the authorization URL
-    const authUrl = `https://api.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(
+    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
       redirectUri
     )}&scope=${scope}&response_type=code`;
     
@@ -50,7 +50,17 @@ export default function Navbar() {
     );
     
     // Redirect to the Instagram authorization page
-    window.location.href = authUrl;
+    // Add state parameter generation
+    const state = crypto.randomUUID();
+    localStorage.setItem('instagram_state', state);
+    
+    window.location.href = `https://www.facebook.com/v19.0/dialog/oauth?${new URLSearchParams({
+      client_id: appId,
+      redirect_uri: encodeURIComponent(redirectUri),
+      scope: 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement',
+      response_type: 'code',
+      state: state // Add state parameter
+    })}`;
   };
 
   return (
