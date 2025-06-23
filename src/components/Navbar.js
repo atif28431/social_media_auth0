@@ -54,7 +54,7 @@ export default function Navbar() {
     const state = crypto.randomUUID();
     localStorage.setItem('instagram_state', state);
     
-    window.location.href = `https://www.facebook.com/v19.0/dialog/oauth?${new URLSearchParams({
+    window.location.href = `https://www.instagram.com/oauth/authorize?${new URLSearchParams({
       client_id: appId,
       redirect_uri: encodeURIComponent(redirectUri),
       scope: 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement',
