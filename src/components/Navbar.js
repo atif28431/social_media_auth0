@@ -9,7 +9,7 @@ export default function Navbar() {
   const { isAuthenticated, fbAccessToken, instagramAccessToken, handleLogout } = useAuth();
 
   const connectFacebook = () => {
-    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID;
+    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
     const redirectUri = `${window.location.origin}/facebook-callback`;
     const scope =
       "pages_show_list,pages_manage_posts,pages_read_engagement,pages_read_user_content,public_profile,email";
@@ -22,9 +22,9 @@ export default function Navbar() {
     // IMPORTANT: Make sure this is the Instagram App ID, not the Facebook App ID
     // You can find this in the Facebook Developer Console under
     // Instagram Basic Display > Basic Display > Instagram App ID
-    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID;
     const redirectUri = `${window.location.origin}/instagram-callback`;
-    const scope = "nstagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement";
+    const scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement";
     
     // Log the Instagram App ID for debugging
     console.log("Using Instagram App ID:", appId);
@@ -54,7 +54,7 @@ export default function Navbar() {
     const state = crypto.randomUUID();
     localStorage.setItem('instagram_state', state);
     
-    window.location.href = `https://www.instagram.com/oauth/authorize?${new URLSearchParams({
+    window.location.href = `https://www.instagram.com/oauth/authorize?force_reauth=true${new URLSearchParams({
       client_id: appId,
       redirect_uri: encodeURIComponent(redirectUri),
       scope: 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement',
