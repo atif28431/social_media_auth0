@@ -9,11 +9,11 @@ export default function Navbar() {
   const { isAuthenticated, fbAccessToken, instagramAccessToken, handleLogout } = useAuth();
 
   const connectFacebook = () => {
-    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID;
     const redirectUri = `${window.location.origin}/facebook-callback`;
     const scope =
       "pages_show_list,pages_manage_posts,pages_read_engagement,pages_read_user_content,public_profile,email";
-    window.location.href = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
+    window.location.href = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${appId}&redirect_uri=${encodeURIComponent(
       redirectUri
     )}&scope=${scope}&response_type=token&auth_type=rerequest`;
   };
@@ -31,7 +31,7 @@ export default function Navbar() {
     console.log("Redirect URI:", redirectUri);
     
     // Construct the authorization URL
-    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
+    const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${appId}&redirect_uri=${encodeURIComponent(
       redirectUri
     )}&scope=${scope}&response_type=code`;
     
