@@ -3,15 +3,15 @@
  */
 
 /**
- * Get user's Instagram accounts
- * @param {string} accessToken - The Facebook access token
- * @returns {Promise} - The response from Instagram with accounts data
+ * Get user's Instagram Business accounts linked via Facebook Pages
+ * @param {string} userAccessToken - The Facebook User Access Token
+ * @returns {Promise<Array>} - The response from Instagram with account + page access token
  */
-export async function getUserInstagramAccounts(accessToken) {
+export async function getUserInstagramAccounts(userAccessToken) {
   try {
-    // First, get the user's Facebook pages that have Instagram accounts connected
+    // Get Facebook Pages managed by the user
     const pagesResponse = await fetch(
-      `https://graph.facebook.com/me/accounts?fields=name,id,instagram_business_account&access_token=${accessToken}`
+      `https://graph.facebook.com/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${userAccessToken}`
     );
     const pagesData = await pagesResponse.json();
 
@@ -19,17 +19,18 @@ export async function getUserInstagramAccounts(accessToken) {
       throw new Error(pagesData.error?.message || "Failed to get user pages");
     }
 
-    // Filter pages that have Instagram accounts connected
     const pagesWithInstagram = pagesData.data.filter(
-      (page) => page.instagram_business_account
+      (page) => page.instagram_business_account && page.access_token
     );
 
-    // Get details for each Instagram account
     const instagramAccounts = await Promise.all(
       pagesWithInstagram.map(async (page) => {
         const igAccountId = page.instagram_business_account.id;
+        const pageAccessToken = page.access_token;
+
+        // Now use the Page Access Token to fetch IG user details
         const igResponse = await fetch(
-          `https://graph.facebook.com/${igAccountId}?fields=id,username,profile_picture_url,name&access_token=${accessToken}`
+          `https://graph.facebook.com/${igAccountId}?fields=id,username,profile_picture_url,name&access_token=${pageAccessToken}`
         );
         const igData = await igResponse.json();
 
@@ -45,12 +46,11 @@ export async function getUserInstagramAccounts(accessToken) {
           profilePicture: igData.profile_picture_url,
           pageId: page.id,
           pageName: page.name,
-          pageAccessToken: page.access_token
+          pageAccessToken: pageAccessToken, // ✅ store for future API calls
         };
       })
     );
 
-    // Filter out any null values from failed requests
     return instagramAccounts.filter(account => account !== null);
   } catch (error) {
     console.error("Error getting Instagram accounts:", error);
@@ -60,17 +60,18 @@ export async function getUserInstagramAccounts(accessToken) {
 
 /**
  * Post a photo to Instagram
- * @param {string} accessToken - The page access token
+ * @param {string} pageAccessToken - The Facebook Page Access Token
  * @param {string} caption - The caption for the post
  * @param {string} imageUrl - The URL of the image to post
  * @param {string} instagramAccountId - The Instagram account ID
  * @returns {Promise} - The response from Instagram
  */
-export async function postToInstagram(accessToken, caption, imageUrl, instagramAccountId) {
+export async function postToInstagram(pageAccessToken, caption, imageUrl, instagramAccountId) {
   try {
-    // Step 1: Create a container for the post
+    // Step 1: Create a container
     const containerResponse = await fetch(
-      `https://graph.facebook.com/${instagramAccountId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`
+      `https://graph.facebook.com/${instagramAccountId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${pageAccessToken}`,
+      { method: "POST" }
     );
     const containerData = await containerResponse.json();
 
@@ -80,7 +81,7 @@ export async function postToInstagram(accessToken, caption, imageUrl, instagramA
 
     // Step 2: Publish the container
     const publishResponse = await fetch(
-      `https://graph.facebook.com/${instagramAccountId}/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
+      `https://graph.facebook.com/${instagramAccountId}/media_publish?creation_id=${containerData.id}&access_token=${pageAccessToken}`,
       { method: "POST" }
     );
     const publishData = await publishResponse.json();
@@ -97,21 +98,19 @@ export async function postToInstagram(accessToken, caption, imageUrl, instagramA
 }
 
 /**
- * Schedule a post to Instagram
- * @param {string} accessToken - The page access token
+ * Schedule a post to Instagram (requires custom logic/storage, IG API doesn't support direct scheduling)
+ * @param {string} pageAccessToken - The Page Access Token
  * @param {string} caption - The caption for the post
  * @param {string} imageUrl - The URL of the image to post
  * @param {Date} scheduledTime - When to publish the post
  * @param {string} instagramAccountId - The Instagram account ID
- * @returns {Promise} - The response from Instagram
+ * @returns {Promise<Object>} - Contains containerId & scheduledTime
  */
-export async function scheduleInstagramPost(accessToken, caption, imageUrl, scheduledTime, instagramAccountId) {
+export async function scheduleInstagramPost(pageAccessToken, caption, imageUrl, scheduledTime, instagramAccountId) {
   try {
-    // For Instagram, we need to store the scheduling info in our database
-    // as Instagram Graph API doesn't support direct scheduling
-    // We'll return the container ID which can be used later to publish
     const containerResponse = await fetch(
-      `https://graph.facebook.com/${instagramAccountId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`
+      `https://graph.facebook.com/${instagramAccountId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${pageAccessToken}`,
+      { method: "POST" }
     );
     const containerData = await containerResponse.json();
 
@@ -119,6 +118,7 @@ export async function scheduleInstagramPost(accessToken, caption, imageUrl, sche
       throw new Error(containerData.error?.message || "Failed to create Instagram media container");
     }
 
+    // Save containerId and scheduledTime in your DB to publish later
     return {
       containerId: containerData.id,
       scheduledTime: scheduledTime.toISOString()
@@ -131,15 +131,15 @@ export async function scheduleInstagramPost(accessToken, caption, imageUrl, sche
 
 /**
  * Publish a previously created Instagram container
- * @param {string} accessToken - The page access token
+ * @param {string} pageAccessToken - The Page Access Token
  * @param {string} containerId - The container ID from scheduleInstagramPost
  * @param {string} instagramAccountId - The Instagram account ID
- * @returns {Promise} - The response from Instagram
+ * @returns {Promise<Object>} - The publish response
  */
-export async function publishInstagramContainer(accessToken, containerId, instagramAccountId) {
+export async function publishInstagramContainer(pageAccessToken, containerId, instagramAccountId) {
   try {
     const publishResponse = await fetch(
-      `https://graph.facebook.com/${instagramAccountId}/media_publish?creation_id=${containerId}&access_token=${accessToken}`,
+      `https://graph.facebook.com/${instagramAccountId}/media_publish?creation_id=${containerId}&access_token=${pageAccessToken}`,
       { method: "POST" }
     );
     const publishData = await publishResponse.json();
