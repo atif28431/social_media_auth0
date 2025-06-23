@@ -24,26 +24,19 @@ export default function Navbar() {
     const scope = "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights";
     console.log("Using Instagram App ID:", appId);
     console.log("Redirect URI:", redirectUri);
-    
-    // Construct the authorization URL
-    const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${appId}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&scope=${scope}&response_type=code`;
-    
-    console.log("Instagram authorization URL:", authUrl);
-    
-    // Redirect to the Instagram authorization page
-    // Add state parameter generation
     const state = crypto.randomUUID();
     localStorage.setItem('instagram_state', state);
+    // Construct the authorization URL
+    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
+  authUrl.searchParams.set("client_id", appId);
+  authUrl.searchParams.set("redirect_uri", redirectUri); // No need to manually encode
+  authUrl.searchParams.set("scope", scope);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("force_reauth", "true");
+  authUrl.searchParams.set("state", state);
     
-    window.location.href = `https://www.instagram.com/oauth/authorize?force_reauth=true&${new URLSearchParams({
-      client_id: appId,
-      redirect_uri: encodeURIComponent(redirectUri),
-      scope: 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights',
-      response_type: 'code',
-      state: state // Add state parameter
-    })}`;
+    console.log("Instagram authorization URL:", authUrl);
+    window.location.href = authUrl.toString();
   };
 
   return (
