@@ -46,7 +46,7 @@ export async function getUserInstagramAccounts(userAccessToken) {
           profilePicture: igData.profile_picture_url,
           pageId: page.id,
           pageName: page.name,
-          pageAccessToken: pageAccessToken, // ✅ store for future API calls
+          pageAccessToken: page.access_token, // ✅ store for future API calls
         };
       })
     );
@@ -85,7 +85,7 @@ export async function postToInstagram(pageAccessToken, caption, imageUrl, instag
       { method: "POST" }
     );
     const publishData = await publishResponse.json();
-
+ 
     if (!publishResponse.ok) {
       throw new Error(publishData.error?.message || "Failed to publish Instagram post");
     }
