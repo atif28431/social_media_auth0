@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Facebook, Instagram } from "lucide-react";
 
 export default function Navbar() {
-  const { isAuthenticated, fbAccessToken, instagramAccessToken, handleLogout } = useAuth();
+  const { isAuthenticated, fbAccessToken, instagramAccessToken, logout } = useAuth();
 
   const connectFacebook = () => {
     const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
