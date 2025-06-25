@@ -76,7 +76,7 @@ export default function Navbar() {
                   Dashboard
                 </Button>
               </Link>
-              <Button variant="outline" size="sm" onClick={handleLogout}>
+              <Button variant="outline" size="sm" onClick={logout}>
                 Logout
               </Button>
             </>
