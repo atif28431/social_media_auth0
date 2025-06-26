@@ -22,18 +22,19 @@ export default function Navbar() {
   const connectInstagram = () => {
     const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID;
     const redirectUri = `${window.location.origin}/instagram-callback`;
-    const scope = "user_profile,user_media";
+    const scope =
+      "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights";
     console.log("Using Instagram App ID:", appId);
     console.log("Redirect URI:", redirectUri);
     const state = crypto.randomUUID();
     localStorage.setItem("instagram_state", state);
-
     // Construct the authorization URL
-    const authUrl = new URL("https://api.instagram.com/oauth/authorize");
+    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", appId);
-    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("redirect_uri", redirectUri); // No need to manually encode
     authUrl.searchParams.set("scope", scope);
     authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("force_reauth", "true");
     authUrl.searchParams.set("state", state);
 
     console.log("Instagram authorization URL:", authUrl);
