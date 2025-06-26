@@ -105,14 +105,11 @@ export function AuthProvider({ children }) {
           tokensToUpsert.facebook_access_token = data?.facebook_access_token || localStorage.getItem("fb_access_token");
         }
 
-        // Check for Instagram access token or auth code
-        if (data?.instagram_access_token || localStorage.getItem("instagram_access_token")) {
-          tokensToUpsert.instagram_access_token = data?.instagram_access_token || localStorage.getItem("instagram_access_token");
-        } else if (localStorage.getItem("instagram_auth_code")) {
-          // In a production app, you would exchange this code for an access token via a backend API
-          // For demo purposes, we'll just store the auth code as a placeholder
-          console.log("Instagram auth code found, would exchange for token in production");
-          tokensToUpsert.instagram_auth_code = localStorage.getItem("instagram_auth_code");
+        // Check for Instagram access token
+        if (data?.instagram_access_token || localStorage.getItem("ig_access_token")) {
+          tokensToUpsert.instagram_access_token = data?.instagram_access_token || localStorage.getItem("ig_access_token");
+          // Also update the state
+          setInstagramAccessToken(data?.instagram_access_token || localStorage.getItem("ig_access_token"));
         }
 
         // Only upsert if we have tokens to store

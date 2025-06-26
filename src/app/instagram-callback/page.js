@@ -12,13 +12,13 @@ export default function InstagramCallback() {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
       const error = urlParams.get("error");
-      
+
       if (code) {
         console.log("Instagram authorization code received:", code);
         // In a real app, you would exchange this code for an access token via a backend API call
         // For now, we'll store the code and handle it later or implement a proper token exchange
         localStorage.setItem("instagram_auth_code", code);
-        
+
         // TODO: Exchange code for access token via backend API
         // For demo purposes, we'll just redirect to dashboard
         router.replace("/dashboard");
@@ -40,7 +40,9 @@ export default function InstagramCallback() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <h1 className="text-2xl font-bold mb-4">Connecting Instagram...</h1>
-      <p className="mb-6 text-center">Please wait while we connect your Instagram account.</p>
+      <p className="mb-6 text-center">
+        Please wait while we connect your Instagram account.
+      </p>
       <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
     </div>
   );
