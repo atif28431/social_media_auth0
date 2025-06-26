@@ -1,12 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          Logging you in...
+        </div>
+      }
+    >
+      <AuthCallbackContent />
+    </Suspense>
+  );
+}
+
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState(null);
@@ -41,11 +55,7 @@ export default function AuthCallbackPage() {
   }, [searchParams, router]);
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        Logging you in...
-      </div>
-    );
+    return null;
   }
   if (error) {
     return (
