@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default function AuthCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,7 +20,11 @@ export default function AuthCallbackPage() {
       return;
     }
     // Call backend API to exchange code for session
-    fetch(`/api/auth/callback?code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ""}`)
+    fetch(
+      `/api/auth/callback?code=${encodeURIComponent(code)}${
+        state ? `&state=${encodeURIComponent(state)}` : ""
+      }`
+    )
       .then(async (res) => {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -34,13 +40,22 @@ export default function AuthCallbackPage() {
   }, [searchParams, router]);
 
   if (loading) {
-    return <div className="flex flex-col items-center justify-center min-h-screen">Logging you in...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        Logging you in...
+      </div>
+    );
   }
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-red-600">
         <div>Login failed: {error}</div>
-        <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded" onClick={() => router.replace("/login")}>Try Again</button>
+        <button
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+          onClick={() => router.replace("/login")}
+        >
+          Try Again
+        </button>
       </div>
     );
   }
