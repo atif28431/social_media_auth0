@@ -31,51 +31,63 @@ CREATE TABLE IF NOT EXISTS facebook_pages (
 ALTER TABLE scheduled_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE facebook_pages ENABLE ROW LEVEL SECURITY;
 
--- Create policies for scheduled_posts
+-- Drop policies if they exist to avoid duplicate errors
+DROP POLICY IF EXISTS "Users can view their own scheduled posts" ON scheduled_posts;
 CREATE POLICY "Users can view their own scheduled posts"
   ON scheduled_posts
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert their own scheduled posts" ON scheduled_posts;
 CREATE POLICY "Users can insert their own scheduled posts"
   ON scheduled_posts
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own scheduled posts" ON scheduled_posts;
 CREATE POLICY "Users can update their own scheduled posts"
   ON scheduled_posts
   FOR UPDATE
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can delete their own scheduled posts" ON scheduled_posts;
 CREATE POLICY "Users can delete their own scheduled posts"
   ON scheduled_posts
   FOR DELETE
   USING (user_id = auth.uid());
 
--- Create policies for facebook_pages
+DROP POLICY IF EXISTS "Users can view their own Facebook pages" ON facebook_pages;
 CREATE POLICY "Users can view their own Facebook pages"
   ON facebook_pages
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert their own Facebook pages" ON facebook_pages;
 CREATE POLICY "Users can insert their own Facebook pages"
   ON facebook_pages
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own Facebook pages" ON facebook_pages;
 CREATE POLICY "Users can update their own Facebook pages"
   ON facebook_pages
   FOR UPDATE
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can delete their own Facebook pages" ON facebook_pages;
 CREATE POLICY "Users can delete their own Facebook pages"
   ON facebook_pages
   FOR DELETE
   USING (user_id = auth.uid());
 
 -- Create indexes
+DROP INDEX IF EXISTS idx_scheduled_posts_user_id;
 CREATE INDEX idx_scheduled_posts_user_id ON scheduled_posts(user_id);
+DROP INDEX IF EXISTS idx_scheduled_posts_status;
 CREATE INDEX idx_scheduled_posts_status ON scheduled_posts(status);
+DROP INDEX IF EXISTS idx_scheduled_posts_scheduled_time;
 CREATE INDEX idx_scheduled_posts_scheduled_time ON scheduled_posts(scheduled_publish_time);
+DROP INDEX IF EXISTS idx_facebook_pages_user_id;
 CREATE INDEX idx_facebook_pages_user_id ON facebook_pages(user_id);
+DROP INDEX IF EXISTS idx_facebook_pages_page_id;
 CREATE INDEX idx_facebook_pages_page_id ON facebook_pages(page_id);

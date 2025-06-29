@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSupabase } from "@/context/SupabaseContext";
 import { getUserInstagramAccounts, postToInstagram, scheduleInstagramPost } from "@/utils/instagram";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Clock, ImageIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, ImageIcon, AlertCircle, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,10 +35,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Toaster } from "@/components/ui/sonner";
 
 export default function InstagramPostForm() {
-  const { accessToken, isAuthenticated } = useAuth();
+  const { accessToken, isAuthenticated, tokenError, refreshFacebookToken } = useAuth();
   const { addScheduledPost, saveInstagramAccounts } = useSupabase();
   const [caption, setCaption] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -50,6 +51,8 @@ export default function InstagramPostForm() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
   const [scheduledDateTime, setScheduledDateTime] = useState(null);
+  const [fetchError, setFetchError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
 
   // Fetch user's Instagram accounts when component mounts
   useEffect(() => {
@@ -57,8 +60,9 @@ export default function InstagramPostForm() {
 
     const fetchAccounts = async () => {
       try {
+        setFetchError("");
         const accountsData = await getUserInstagramAccounts(accessToken);
-        console.log("Fetched Instagram accounts:", accountsData); // Debug log
+        console.log("Fetched Instagram accounts:", accountsData);
         setAccounts(accountsData);
         
         // Save accounts to Supabase for future use
@@ -68,13 +72,21 @@ export default function InstagramPostForm() {
           setSelectedAccount(accountsData[0].id);
           setSelectedAccountName(accountsData[0].username);
         }
+        setRetryCount(0); // Reset retry count on success
       } catch (err) {
         console.error("Error fetching Instagram accounts:", err);
+        
+        // Check if it's a token expiration error
+        if (err.message.includes("Session has expired") || err.message.includes("access token")) {
+          setFetchError("Your access token has expired. Please reconnect your Facebook account.");
+        } else {
+          setFetchError(`Failed to load Instagram accounts: ${err.message}`);
+        }
       }
     };
 
     fetchAccounts();
-  }, [isAuthenticated, accessToken, saveInstagramAccounts]);
+  }, [isAuthenticated, accessToken, saveInstagramAccounts, retryCount]);
 
   // Update scheduledDateTime when date or time changes
   useEffect(() => {
@@ -85,6 +97,29 @@ export default function InstagramPostForm() {
       setScheduledDateTime(null);
     }
   }, [enableScheduling, scheduledDate, scheduledTime]);
+
+  const handleRetryFetch = async () => {
+    if (tokenError || fetchError.includes("expired")) {
+      // Try to refresh the token first
+      const refreshed = await refreshFacebookToken();
+      if (refreshed) {
+        setRetryCount(prev => prev + 1); // This will trigger the useEffect to refetch
+      } else {
+        setFetchError("Failed to refresh token. Please reconnect your Facebook account.");
+      }
+    } else {
+      setRetryCount(prev => prev + 1); // This will trigger the useEffect to refetch
+    }
+  };
+
+  const handleReconnectFacebook = () => {
+    // Redirect to Facebook OAuth
+    const fbAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+    const redirectUri = encodeURIComponent(`${window.location.origin}/facebook-callback`);
+    const scope = encodeURIComponent("pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish,pages_manage_posts");
+    
+    window.location.href = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${fbAppId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -100,16 +135,20 @@ export default function InstagramPostForm() {
       
       // Find the selected account object
       const accountObj = accounts.find((a) => a.id === selectedAccount);
-      if (!accountObj || !accountObj.access_token) {
-        console.warn("No access token found for selected account.");
-        throw new Error("Authentication error. Please reconnect your Instagram account.");
+      if (!accountObj) {
+        throw new Error("Selected account not found. Please refresh and try again.");
+      }
+
+      // Check if we have the page access token
+      if (!accountObj.pageAccessToken) {
+        throw new Error("Missing access token for the selected account. Please reconnect your Instagram account.");
       }
       
       let result;
       if (enableScheduling && scheduledDateTime) {
         // Schedule the post
         result = await scheduleInstagramPost(
-          accountObj.access_token,
+          accountObj.pageAccessToken,
           caption,
           imageUrl,
           scheduledDateTime,
@@ -129,7 +168,7 @@ export default function InstagramPostForm() {
       } else {
         // Post immediately
         result = await postToInstagram(
-          accountObj.access_token,
+          accountObj.pageAccessToken,
           caption,
           imageUrl,
           selectedAccount
@@ -148,7 +187,19 @@ export default function InstagramPostForm() {
       setScheduledDateTime(null);
     } catch (err) {
       console.error("Error posting to Instagram:", err);
-      window.alert("Error posting to Instagram: " + (err.message || err));
+      
+      // Provide more specific error messages
+      let errorMessage = err.message || "Unknown error occurred";
+      
+      if (err.message.includes("Session has expired") || err.message.includes("access token")) {
+        errorMessage = "Your access token has expired. Please reconnect your Facebook account.";
+      } else if (err.message.includes("Invalid image URL")) {
+        errorMessage = "The image URL is invalid or inaccessible. Please check the URL and try again.";
+      } else if (err.message.includes("rate limit")) {
+        errorMessage = "Rate limit exceeded. Please wait a few minutes before trying again.";
+      }
+      
+      window.alert("Error posting to Instagram: " + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -168,6 +219,33 @@ export default function InstagramPostForm() {
       </CardHeader>
 
       <CardContent>
+        {/* Token Error Alert */}
+        {tokenError && (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{tokenError}</span>
+              <Button onClick={handleReconnectFacebook} size="sm" variant="outline">
+                Reconnect Facebook
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Fetch Error Alert */}
+        {fetchError && (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{fetchError}</span>
+              <Button onClick={handleRetryFetch} size="sm" variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
             {/* Image URL Field */}
@@ -213,14 +291,23 @@ export default function InstagramPostForm() {
                   const account = accounts.find((a) => a.id === value);
                   if (account) setSelectedAccountName(account.username);
                 }}
+                disabled={accounts.length === 0 || !!fetchError}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select an account" />
+                  <SelectValue placeholder={
+                    fetchError ? "Error loading accounts" : 
+                    accounts.length === 0 ? "Loading accounts..." : 
+                    "Select an account"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.length === 0 ? (
+                  {accounts.length === 0 && !fetchError ? (
                     <div className="p-2 text-muted-foreground text-sm">
                       Loading accounts...
+                    </div>
+                  ) : fetchError ? (
+                    <div className="p-2 text-muted-foreground text-sm">
+                      Error loading accounts
                     </div>
                   ) : (
                     accounts.map((account) => (
@@ -302,6 +389,8 @@ export default function InstagramPostForm() {
               loading ||
               !imageUrl ||
               !selectedAccount ||
+              !!fetchError ||
+              !!tokenError ||
               (enableScheduling && (!scheduledDate || !scheduledTime))
             }
           >

@@ -46,7 +46,7 @@ export async function POST(request) {
     
     // Get a long-lived token
     const longLivedTokenResponse = await fetch(
-      `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${process.env.INSTAGRAM_APP_SECRET}&access_token=${tokenData.access_token}`
+      `https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_secret=${process.env.INSTAGRAM_APP_SECRET}&access_token=${tokenData.access_token}`
     );
     
     const longLivedTokenData = await longLivedTokenResponse.json();

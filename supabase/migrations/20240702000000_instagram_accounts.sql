@@ -17,26 +17,30 @@ CREATE TABLE IF NOT EXISTS instagram_accounts (
 -- Enable Row Level Security
 ALTER TABLE instagram_accounts ENABLE ROW LEVEL SECURITY;
 
--- Create policies for instagram_accounts
+-- Drop policies if they exist to avoid duplicate errors
+DROP POLICY IF EXISTS "Users can view their own Instagram accounts" ON instagram_accounts;
 CREATE POLICY "Users can view their own Instagram accounts"
   ON instagram_accounts
   FOR SELECT
-  USING (user_id = auth.uid());
+  USING (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can insert their own Instagram accounts" ON instagram_accounts;
 CREATE POLICY "Users can insert their own Instagram accounts"
   ON instagram_accounts
   FOR INSERT
-  WITH CHECK (user_id = auth.uid());
+  WITH CHECK (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can update their own Instagram accounts" ON instagram_accounts;
 CREATE POLICY "Users can update their own Instagram accounts"
   ON instagram_accounts
   FOR UPDATE
-  USING (user_id = auth.uid());
+  USING (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can delete their own Instagram accounts" ON instagram_accounts;
 CREATE POLICY "Users can delete their own Instagram accounts"
   ON instagram_accounts
   FOR DELETE
-  USING (user_id = auth.uid());
+  USING (user_id = auth.uid()::text);
 
 -- Create indexes
 CREATE INDEX idx_instagram_accounts_user_id ON instagram_accounts(user_id);

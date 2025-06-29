@@ -39,7 +39,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 export default function FacebookPostForm() {
   const { accessToken, isAuthenticated } = useAuth();
-  const { addScheduledPost } = useSupabase();
+  const { addScheduledPost, saveUserPages } = useSupabase();
   const [message, setMessage] = useState("");
   const [pages, setPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState("");
@@ -55,18 +55,29 @@ export default function FacebookPostForm() {
     if (!isAuthenticated || !accessToken) return;
 
     const fetchPages = async () => {
-      try {
-        const pagesData = await getUserPages(accessToken);
-        console.log("Fetched Facebook pages:", pagesData); // Debug log
-        setPages(pagesData);
-        if (pagesData.length > 0) {
-          setSelectedPage(pagesData[0].id);
-          setSelectedPageName(pagesData[0].name);
-        }
-      } catch (err) {
-        console.error("Error fetching pages:", err);
+  try {
+    const pagesData = await getUserPages(accessToken);
+    console.log("Fetched Facebook pages:", pagesData);
+    setPages(pagesData);
+    
+    // Save pages to database
+    if (pagesData.length > 0) {
+      const saved = await saveUserPages(pagesData);
+      if (saved) {
+        console.log("Pages saved to database successfully");
+      } else {
+        console.error("Failed to save pages to database");
       }
-    };
+    }
+    
+    if (pagesData.length > 0) {
+      setSelectedPage(pagesData[0].id);
+      setSelectedPageName(pagesData[0].name);
+    }
+  } catch (err) {
+    console.error("Error fetching pages:", err);
+  }
+};
 
     fetchPages();
   }, [isAuthenticated, accessToken]);
