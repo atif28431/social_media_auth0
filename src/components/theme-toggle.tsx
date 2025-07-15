@@ -27,7 +27,8 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem 
+        <DropdownMenuItem
+          inset={true}
           onClick={() => setTheme("light")}
           className="flex items-center gap-2 cursor-pointer"
         >
@@ -38,6 +39,7 @@ export function ThemeToggle() {
           )}
         </DropdownMenuItem>
         <DropdownMenuItem 
+        inset={true}
           onClick={() => setTheme("dark")}
           className="flex items-center gap-2 cursor-pointer"
         >
@@ -48,6 +50,7 @@ export function ThemeToggle() {
           )}
         </DropdownMenuItem>
         <DropdownMenuItem 
+        inset={true}
           onClick={() => setTheme("system")}
           className="flex items-center gap-2 cursor-pointer"
         >

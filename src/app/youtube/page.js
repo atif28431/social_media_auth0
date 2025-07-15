@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getUserYoutubeChannels } from '@/utils/youtube';
@@ -13,7 +13,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import YoutubePostForm from '@/components/YoutubePostForm';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-export default function YoutubePage() {
+// Loading component
+function LoadingSpinner() {
+  return (
+    <div className="flex justify-center items-center py-12">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <span className="ml-2 text-lg">Loading YouTube channels...</span>
+    </div>
+  );
+}
+
+// Component that uses useSearchParams - must be wrapped in Suspense
+function YoutubePageContent() {
   const { youtubeAccessToken, refreshYoutubeToken } = useAuth();
   const [loading, setLoading] = useState(true);
   const [channels, setChannels] = useState([]);
@@ -85,11 +96,6 @@ export default function YoutubePage() {
     }
   };
 
-  // No longer needed as we're using the integrated form
-  // const handleCreatePost = () => {
-  //   router.push('/create-post?platform=youtube');
-  // };
-
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-3xl font-bold mb-6">YouTube</h1>
@@ -115,12 +121,7 @@ export default function YoutubePage() {
       )}
 
       {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2 text-lg">Loading YouTube channels...</span>
-        </div>
-      )}
+      {loading && <LoadingSpinner />}
 
       {/* Not Connected State */}
       {!loading && !youtubeAccessToken && (
@@ -136,7 +137,7 @@ export default function YoutubePage() {
           </CardHeader>
           <CardContent>
             <p className="mb-4">
-              By connecting your YouTube account, you'll be able to:
+              By connecting your YouTube account, you&apos;ll be able to:
             </p>
             <ul className="list-disc pl-5 mb-4 space-y-1">
               <li>Upload videos directly to your YouTube channel</li>
@@ -169,71 +170,65 @@ export default function YoutubePage() {
                 <h2 className="text-xl font-semibold">Your YouTube Channels</h2>
               </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {channels.map((channel) => (
-              <Card key={channel.id} className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center space-x-4">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage 
-                        src={channel.snippet.thumbnails?.default?.url} 
-                        alt={channel.snippet.title} 
-                      />
-                      <AvatarFallback>{channel.snippet.title.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <CardTitle className="text-lg">{channel.snippet.title}</CardTitle>
-                      {channel.snippet.customUrl && (
-                        <CardDescription>{channel.snippet.customUrl}</CardDescription>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {channels.map((channel) => (
+                  <Card key={channel.id} className="overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center space-x-4">
+                        <Avatar className="h-12 w-12">
+                          <AvatarImage 
+                            src={channel.snippet.thumbnails?.default?.url} 
+                            alt={channel.snippet.title} 
+                          />
+                          <AvatarFallback>{channel.snippet.title.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <CardTitle className="text-lg">{channel.snippet.title}</CardTitle>
+                          {channel.snippet.customUrl && (
+                            <CardDescription>@{channel.snippet.customUrl}</CardDescription>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {channel.statistics && (
+                        <div className="grid grid-cols-3 gap-2 text-center py-2">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Subscribers</p>
+                            <p className="font-medium">
+                              {parseInt(channel.statistics.subscriberCount).toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Videos</p>
+                            <p className="font-medium">
+                              {parseInt(channel.statistics.videoCount).toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Views</p>
+                            <p className="font-medium">
+                              {parseInt(channel.statistics.viewCount).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
                       )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {channel.statistics && (
-                    <div className="grid grid-cols-3 gap-2 text-center py-2">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Subscribers</p>
-                        <p className="font-medium">
-                          {parseInt(channel.statistics.subscriberCount).toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Videos</p>
-                        <p className="font-medium">
-                          {parseInt(channel.statistics.videoCount).toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Shorts</p>
-                        <p className="font-medium">
-                          {parseInt(channel.statistics.shortsCount).toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Views</p>
-                        <p className="font-medium">
-                          {parseInt(channel.statistics.viewCount).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {channel.snippet.description && (
-                    <p className="text-sm mt-4 line-clamp-3">{channel.snippet.description}</p>
-                  )}
-                </CardContent>
-                <CardFooter className="bg-muted/50 border-t">
-                  <Button 
-                    variant="outline" 
-                    className="w-full" 
-                    onClick={() => window.open(`https://youtube.com/channel/${channel.id}`, '_blank')}
-                  >
-                    View Channel
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
+                      {channel.snippet.description && (
+                        <p className="text-sm mt-4 line-clamp-3">{channel.snippet.description}</p>
+                      )}
+                    </CardContent>
+                    <CardFooter className="bg-muted/50 border-t">
+                      <Button 
+                        variant="outline" 
+                        className="w-full" 
+                        onClick={() => window.open(`https://youtube.com/channel/${channel.id}`, '_blank')}
+                      >
+                        View Channel
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
             </TabsContent>
           </Tabs>
         </div>
@@ -248,7 +243,7 @@ export default function YoutubePage() {
               No YouTube Channels Found
             </CardTitle>
             <CardDescription>
-              Your YouTube account is connected, but we couldn't find any channels.
+              Your YouTube account is connected, but we couldn&apos;t find any channels.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -266,5 +261,13 @@ export default function YoutubePage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function YoutubePage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <YoutubePageContent />
+    </Suspense>
   );
 }
