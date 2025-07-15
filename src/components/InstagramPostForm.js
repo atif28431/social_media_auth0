@@ -6,6 +6,7 @@ import { useSupabase } from "@/context/SupabaseContext";
 import { getUserInstagramAccounts, postToInstagram, scheduleInstagramPost } from "@/utils/instagram";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Clock, ImageIcon, AlertCircle, RefreshCw } from "lucide-react";
+import HashtagManager from "@/components/HashtagManager";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,7 @@ export default function InstagramPostForm() {
   const { accessToken, isAuthenticated, tokenError, refreshFacebookToken } = useAuth();
   const { addScheduledPost, saveInstagramAccounts } = useSupabase();
   const [caption, setCaption] = useState("");
+  const [hashtags, setHashtags] = useState([]);
   const [imageUrl, setImageUrl] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
@@ -121,6 +123,21 @@ export default function InstagramPostForm() {
     window.location.href = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${fbAppId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
   };
 
+  const handleHashtagsChange = (newHashtags) => {
+    setHashtags(newHashtags);
+  };
+
+  const buildFinalCaption = () => {
+    let finalCaption = caption.trim();
+    
+    // Add hashtags to caption if any are selected
+    if (hashtags.length > 0) {
+      finalCaption += '\n\n' + hashtags.join(' ');
+    }
+    
+    return finalCaption;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -143,13 +160,16 @@ export default function InstagramPostForm() {
       if (!accountObj.pageAccessToken) {
         throw new Error("Missing access token for the selected account. Please reconnect your Instagram account.");
       }
+
+      // Build final caption with hashtags
+      const finalCaption = buildFinalCaption();
       
       let result;
       if (enableScheduling && scheduledDateTime) {
         // Schedule the post
         result = await scheduleInstagramPost(
           accountObj.pageAccessToken,
-          caption,
+          finalCaption,
           imageUrl,
           scheduledDateTime,
           selectedAccount
@@ -157,7 +177,7 @@ export default function InstagramPostForm() {
         
         // Save scheduled post to Supabase
         await addScheduledPost({
-          message: caption,
+          message: finalCaption,
           scheduledPublishTime: scheduledDateTime.toISOString(),
           pageId: accountObj.pageId,
           pageName: accountObj.pageName,
@@ -169,7 +189,7 @@ export default function InstagramPostForm() {
         // Post immediately
         result = await postToInstagram(
           accountObj.pageAccessToken,
-          caption,
+          finalCaption,
           imageUrl,
           selectedAccount
         );
@@ -180,6 +200,7 @@ export default function InstagramPostForm() {
       
       // Reset form fields
       setCaption("");
+      setHashtags([]);
       setImageUrl("");
       setEnableScheduling(false);
       setScheduledDate("");
@@ -210,198 +231,244 @@ export default function InstagramPostForm() {
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle>Post to Instagram</CardTitle>
-        <CardDescription>
-          Create a new post or schedule it for later
-        </CardDescription>
-      </CardHeader>
+    <div className="w-full max-w-4xl mx-auto space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Post to Instagram</CardTitle>
+          <CardDescription>
+            Create a new post or schedule it for later with AI-generated hashtags
+          </CardDescription>
+        </CardHeader>
 
-      <CardContent>
-        {/* Token Error Alert */}
-        {tokenError && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex items-center justify-between">
-              <span>{tokenError}</span>
-              <Button onClick={handleReconnectFacebook} size="sm" variant="outline">
-                Reconnect Facebook
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        <CardContent>
+          {/* Token Error Alert */}
+          {tokenError && (
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>{tokenError}</span>
+                <Button onClick={handleReconnectFacebook} size="sm" variant="outline">
+                  Reconnect Facebook
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {/* Fetch Error Alert */}
-        {fetchError && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex items-center justify-between">
-              <span>{fetchError}</span>
-              <Button onClick={handleRetryFetch} size="sm" variant="outline">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Retry
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+          {/* Fetch Error Alert */}
+          {fetchError && (
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>{fetchError}</span>
+                <Button onClick={handleRetryFetch} size="sm" variant="outline">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            {/* Image URL Field */}
-            <div className="space-y-2">
-              <label htmlFor="imageUrl" className="flex items-center gap-2 text-sm font-medium">
-                <ImageIcon className="h-4 w-4" /> Image URL
-              </label>
-              <Input
-                id="imageUrl"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://example.com/your-image.jpg"
-                required
-              />
-              <p className="text-sm text-muted-foreground">
-                Enter a publicly accessible URL to your image
-              </p>
-            </div>
-            
-            {/* Caption Field */}
-            <div className="space-y-2">
-              <label htmlFor="caption" className="text-sm font-medium">
-                Caption
-              </label>
-              <Textarea
-                id="caption"
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="Write your caption here..."
-                className="min-h-[120px]"
-              />
-            </div>
-
-            {/* Account Selector */}
-            <div className="space-y-2">
-              <label htmlFor="account" className="text-sm font-medium">
-                Post to
-              </label>
-              <Select
-                value={selectedAccount}
-                onValueChange={(value) => {
-                  setSelectedAccount(value);
-                  const account = accounts.find((a) => a.id === value);
-                  if (account) setSelectedAccountName(account.username);
-                }}
-                disabled={accounts.length === 0 || !!fetchError}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={
-                    fetchError ? "Error loading accounts" : 
-                    accounts.length === 0 ? "Loading accounts..." : 
-                    "Select an account"
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.length === 0 && !fetchError ? (
-                    <div className="p-2 text-muted-foreground text-sm">
-                      Loading accounts...
-                    </div>
-                  ) : fetchError ? (
-                    <div className="p-2 text-muted-foreground text-sm">
-                      Error loading accounts
-                    </div>
-                  ) : (
-                    accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.username}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Note: You must have a Facebook Page with a connected Instagram Professional account.
-              </p>
-            </div>
-
-            {/* Schedule Checkbox */}
-            <div className="flex flex-row items-start space-x-3 rounded-md border p-4">
-              <Checkbox
-                id="enableScheduling"
-                checked={enableScheduling}
-                onCheckedChange={setEnableScheduling}
-              />
-              <div className="space-y-1 leading-none">
-                <label
-                  htmlFor="enableScheduling"
-                  className="text-sm font-medium"
-                >
-                  Schedule for later
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
+              {/* Image URL Field */}
+              <div className="space-y-2">
+                <label htmlFor="imageUrl" className="flex items-center gap-2 text-sm font-medium">
+                  <ImageIcon className="h-4 w-4" /> Image URL
                 </label>
+                <Input
+                  id="imageUrl"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://example.com/your-image.jpg"
+                  required
+                />
                 <p className="text-sm text-muted-foreground">
-                  Choose a future date and time to publish this post
+                  Enter a publicly accessible URL to your image
                 </p>
               </div>
-            </div>
+              
+              {/* Caption Field */}
+              <div className="space-y-2">
+                <label htmlFor="caption" className="text-sm font-medium">
+                  Caption
+                </label>
+                <Textarea
+                  id="caption"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Write your caption here... (hashtags will be added automatically below)"
+                  className="min-h-[120px]"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Write your main caption here. Hashtags will be managed separately below.
+                </p>
+              </div>
 
-            {/* Date & Time Inputs */}
-            {enableScheduling && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              {/* Account Selector */}
+              <div className="space-y-2">
+                <label htmlFor="account" className="text-sm font-medium">
+                  Post to
+                </label>
+                <Select
+                  value={selectedAccount}
+                  onValueChange={(value) => {
+                    setSelectedAccount(value);
+                    const account = accounts.find((a) => a.id === value);
+                    if (account) setSelectedAccountName(account.username);
+                  }}
+                  disabled={accounts.length === 0 || !!fetchError}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      fetchError ? "Error loading accounts" : 
+                      accounts.length === 0 ? "Loading accounts..." : 
+                      "Select an account"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.length === 0 && !fetchError ? (
+                      <div className="p-2 text-muted-foreground text-sm">
+                        Loading accounts...
+                      </div>
+                    ) : fetchError ? (
+                      <div className="p-2 text-muted-foreground text-sm">
+                        Error loading accounts
+                      </div>
+                    ) : (
+                      accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.username}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Note: You must have a Facebook Page with a connected Instagram Professional account.
+                </p>
+              </div>
+
+              {/* Schedule Checkbox */}
+              <div className="flex flex-row items-start space-x-3 rounded-md border p-4">
+                <Checkbox
+                  id="enableScheduling"
+                  checked={enableScheduling}
+                  onCheckedChange={setEnableScheduling}
+                />
+                <div className="space-y-1 leading-none">
                   <label
-                    htmlFor="scheduledDate"
-                    className="flex items-center gap-2 text-sm font-medium"
+                    htmlFor="enableScheduling"
+                    className="text-sm font-medium"
                   >
-                    <CalendarIcon className="h-4 w-4" /> Date
+                    Schedule for later
                   </label>
-                  <Input
-                    type="date"
-                    id="scheduledDate"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
-                    required={enableScheduling}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label
-                    htmlFor="scheduledTime"
-                    className="flex items-center gap-2 text-sm font-medium"
-                  >
-                    <Clock className="h-4 w-4" /> Time
-                  </label>
-                  <Input
-                    type="time"
-                    id="scheduledTime"
-                    value={scheduledTime}
-                    onChange={(e) => setScheduledTime(e.target.value)}
-                    required={enableScheduling}
-                  />
+                  <p className="text-sm text-muted-foreground">
+                    Choose a future date and time to publish this post
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={
-              loading ||
-              !imageUrl ||
-              !selectedAccount ||
-              !!fetchError ||
-              !!tokenError ||
-              (enableScheduling && (!scheduledDate || !scheduledTime))
-            }
-          >
-            {loading
-              ? "Posting..."
-              : enableScheduling
-              ? "Schedule Post"
-              : "Post Now"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+              {/* Date & Time Inputs */}
+              {enableScheduling && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="scheduledDate"
+                      className="flex items-center gap-2 text-sm font-medium"
+                    >
+                      <CalendarIcon className="h-4 w-4" /> Date
+                    </label>
+                    <Input
+                      type="date"
+                      id="scheduledDate"
+                      value={scheduledDate}
+                      onChange={(e) => setScheduledDate(e.target.value)}
+                      min={new Date().toISOString().split("T")[0]}
+                      required={enableScheduling}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="scheduledTime"
+                      className="flex items-center gap-2 text-sm font-medium"
+                    >
+                      <Clock className="h-4 w-4" /> Time
+                    </label>
+                    <Input
+                      type="time"
+                      id="scheduledTime"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      required={enableScheduling}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                loading ||
+                !imageUrl ||
+                !selectedAccount ||
+                !!fetchError ||
+                !!tokenError ||
+                (enableScheduling && (!scheduledDate || !scheduledTime))
+              }
+            >
+              {loading
+                ? "Posting..."
+                : enableScheduling
+                ? "Schedule Post"
+                : "Post Now"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Hashtag Manager */}
+      <HashtagManager
+        caption={caption}
+        onHashtagsChange={handleHashtagsChange}
+        initialHashtags={hashtags}
+      />
+
+      {/* Preview Card */}
+      {(caption || hashtags.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Post Preview</CardTitle>
+            <CardDescription>
+              This is how your post will look
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {imageUrl && (
+                <div className="w-full max-w-md mx-auto">
+                  <img
+                    src={imageUrl}
+                    alt="Post preview"
+                    className="w-full h-auto rounded-lg border"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-2">Caption Preview:</h4>
+                <div className="whitespace-pre-wrap text-sm">
+                  {buildFinalCaption() || "Your caption will appear here..."}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

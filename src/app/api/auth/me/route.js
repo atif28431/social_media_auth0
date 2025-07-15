@@ -1,15 +1,12 @@
-import { NextResponse } from "next/server";
+import { getAccessToken } from '@auth0/nextjs-auth0';
+import { NextResponse } from 'next/server';
 
-export async function GET(request) {
-  const { cookies } = request;
-  const idToken = cookies.get("id_token");
-  if (!idToken) {
-    return NextResponse.json(null, { status: 200 });
+export async function GET() {
+  try {
+    const { accessToken } = await getAccessToken();
+    return NextResponse.json({ accessToken });
+  } catch (error) {
+    console.error('Error getting access token:', error);
+    return NextResponse.json({ accessToken: null });
   }
-  // Optionally, decode the token to get user info
-  // For now, just return a dummy user object
-  return NextResponse.json(
-    { email: "user@example.com", idToken },
-    { status: 200 }
-  );
 }

@@ -12,7 +12,6 @@ A multi-platform social media management application built with Next.js, Supabas
 - Secure authentication with Auth0
 - Enhanced session management with Supabase
 - Data persistence with Supabase
-
 ## Prerequisites
 
 - Node.js 18+ and npm

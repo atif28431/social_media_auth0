@@ -2,7 +2,11 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import Providers from '@/components/Providers';
-import Navbar from '@/components/Navbar';
+import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { Auth0Provider } from '@auth0/nextjs-auth0';
+import { ThemeProvider } from '@/components/theme-provider';
 
 // Configure the Geist fonts with variable property for CSS variables
 
@@ -13,16 +17,30 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className="font-sans">
-        <Providers>
-          <div className="min-h-screen flex flex-col">
-            <Navbar />
-            <main className="flex-grow">
-              {children}
-            </main>
-          </div>
-        </Providers>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      <body className="font-sans ">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <Auth0Provider>
+            <Providers>
+              <SidebarProvider>
+                <div className="min-h-screen flex w-full">
+                  <Sidebar />
+                  <div className="flex-1 flex flex-col overflow-hidden w-full">
+                    <Header />
+                    <main className="flex-1 overflow-auto w-full">
+                      {children}
+                    </main>
+                  </div>
+                </div>
+              </SidebarProvider>
+            </Providers>
+          </Auth0Provider>
+        </ThemeProvider>
       </body>
     </html>
   );

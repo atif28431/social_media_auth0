@@ -145,11 +145,23 @@ export function SupabaseProvider({ children }) {
 
   // Function to save user's Facebook pages to Supabase
   const saveUserPages = async (pages) => {
-    if (!isAuthenticated || !user?.id || !supabase || !pages?.length) return false;
+    if (!isAuthenticated || !user?.id || !supabase || !pages?.length) {
+      console.log('saveUserPages validation failed:', {
+        isAuthenticated,
+        hasUserId: !!user?.id,
+        hasSupabase: !!supabase,
+        pagesLength: pages?.length
+      });
+      return false;
+    }
 
     try {
+      console.log('Saving pages for user:', user.id);
+      console.log('Pages to save:', pages.length);
+      
       // First delete existing pages to avoid duplicates
-      await supabase.from("facebook_pages").delete().eq("user_id", user.id);
+      const deleteResult = await supabase.from("facebook_pages").delete().eq("user_id", user.id);
+      console.log('Delete result:', deleteResult);
 
       // Then insert the new pages
       const pagesData = pages.map((page) => ({
@@ -160,13 +172,19 @@ export function SupabaseProvider({ children }) {
         category: page.category || null,
       }));
 
-      const { error } = await supabase.from("facebook_pages").insert(pagesData);
+      console.log('Inserting pages data:', pagesData);
+      const { data, error } = await supabase.from("facebook_pages").insert(pagesData);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Insert error:', error);
+        throw error;
+      }
 
+      console.log('Pages saved successfully:', data);
       return true;
     } catch (err) {
       console.error("Error saving user pages:", err);
+      console.log('Save result: false');
       return false;
     }
   };
@@ -243,6 +261,53 @@ export function SupabaseProvider({ children }) {
     }
   };
 
+  // Function to upload an image to Supabase Storage and get a public URL
+  const uploadImage = async (file, folder = "instagram") => {
+    if (!isAuthenticated || !user?.id || !supabase || !file) {
+      throw new Error("Authentication or file required for upload");
+    }
+
+    try {
+      // Create a unique file name to avoid collisions
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
+      
+      // Format the user ID to be compatible with storage paths
+      // Replace the pipe character with underscore to avoid path issues
+      const formattedUserId = user.id.replace(/\|/g, '_');
+      
+      // Include the user ID in the path to satisfy RLS policies
+      // Format: userId/folder/filename
+      const filePath = `${formattedUserId}/${folder}/${fileName}`;
+
+      console.log("Uploading file with path:", filePath);
+      
+      // Upload the file to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('social-media-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) {
+        console.error("Supabase storage upload error:", error);
+        throw error;
+      }
+
+      // Get the public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from('social-media-images')
+        .getPublicUrl(filePath);
+
+      console.log("File uploaded successfully, public URL:", publicUrl);
+      return publicUrl;
+    } catch (err) {
+      console.error("Error uploading image:", err);
+      throw new Error("Failed to upload image: " + (err.message || "Unknown error"));
+    }
+  };
+
   const value = {
     supabase,
     scheduledPosts,
@@ -256,6 +321,7 @@ export function SupabaseProvider({ children }) {
     getUserPages,
     saveInstagramAccounts,
     getUserInstagramAccounts,
+    uploadImage,
   };
 
   return (
