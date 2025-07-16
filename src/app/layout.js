@@ -4,6 +4,7 @@ import './globals.css';
 import Providers from '@/components/Providers';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Auth0Provider } from '@auth0/nextjs-auth0';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -35,6 +36,7 @@ export default function RootLayout({ children }) {
                     <main className="flex-1 overflow-auto w-full">
                       {children}
                     </main>
+                    <Footer />
                   </div>
                 </div>
               </SidebarProvider>

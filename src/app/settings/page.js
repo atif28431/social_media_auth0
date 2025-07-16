@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Facebook, Instagram, Twitter, Linkedin, Settings, User, FileText, Plus, Youtube } from "lucide-react";
+import { Facebook, Instagram, Twitter, Linkedin, Settings, User, FileText, Plus, Youtube, Shield, Scale } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
@@ -249,7 +250,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="accounts" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 gap-1 sm:gap-0 mb-4 sm:mb-6 sticky top-0 bg-background z-10">
+        <TabsList className="grid w-full grid-cols-4 gap-1 sm:gap-0 mb-4 sm:mb-6 sticky top-0 bg-background z-10">
           <TabsTrigger value="accounts" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-1 sm:py-2">
             <Settings className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="sm:inline">Social Accounts</span><span className="inline sm:hidden">Accounts</span>
           </TabsTrigger>
@@ -258,6 +259,9 @@ export default function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="templates" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-1 sm:py-2">
             <FileText className="h-3 w-3 sm:h-4 sm:w-4" /> Templates
+          </TabsTrigger>
+          <TabsTrigger value="legal" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-1 sm:py-2">
+            <Scale className="h-3 w-3 sm:h-4 sm:w-4" /> Legal
           </TabsTrigger>
         </TabsList>
 
@@ -382,6 +386,101 @@ export default function SettingsPage() {
                   <Plus className="h-4 w-4 mr-2" />
                   Create Template
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="legal" className="space-y-6 w-full">
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="h-5 w-5" />
+                Legal Information
+              </CardTitle>
+              <CardDescription>
+                Review our legal documents and policies
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Privacy Policy Card */}
+                <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold mb-2">Privacy Policy</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Learn how we collect, use, and protect your personal information when you use our services.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+                          <Link href="/privacy">
+                            View Privacy Policy
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Terms & Conditions Card */}
+                <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold mb-2">Terms & Conditions</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Review the terms of service that govern your use of our platform and services.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+                          <Link href="/terms">
+                            View Terms & Conditions
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="bg-muted/30 p-4 rounded-lg">
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Legal Questions?
+                </h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  If you have any questions about our privacy policy, terms of service, or any legal matters, please contact us:
+                </p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Email:</span>
+                    <a href="mailto:contact.ansari@gmail.com" className="text-primary hover:underline">
+                      contact.ansari@gmail.com
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Phone:</span>
+                    <span className="text-muted-foreground">+91 9820313746</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Location:</span>
+                    <span className="text-muted-foreground">Mumbai, India</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Last Updated Info */}
+              <div className="text-center py-4 border-t">
+                <p className="text-xs text-muted-foreground">
+                  Last updated: July 16, 2025 • Governed by the laws of India
+                </p>
               </div>
             </CardContent>
           </Card>
