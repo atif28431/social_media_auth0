@@ -150,7 +150,7 @@ export default function SettingsPage() {
   const connectFacebook = () => {
     const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
     const redirectUri = `${window.location.origin}/api/facebook/token`;
-    const scope = "pages_show_list,pages_manage_posts,pages_read_engagement,pages_read_user_content,email";
+    const scope = "pages_show_list,pages_manage_posts,pages_read_engagement,pages_read_user_content,public_profile,email";
     window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&auth_type=rerequest&state=${user.id}&config_id=1239005794090767`;
   };
   const handleConnectYoutube = async () => {
@@ -173,7 +173,7 @@ export default function SettingsPage() {
     // Store state in localStorage for verification
     localStorage.setItem('instagram_state', state);
     
-    window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&auth_type=rerequest&state=${state}&config_id=1239005794090767`;
+    window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&auth_type=rerequest&state=${state}`;
   };
 
   
