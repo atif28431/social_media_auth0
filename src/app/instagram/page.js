@@ -67,25 +67,31 @@ export default function InstagramPage() {
   // Fetch Instagram accounts when component mounts
   useEffect(() => {
     const fetchInstagramAccounts = async () => {
-      if (isAuthenticated && instagramAccessToken && user?.id) {
-        console.log('🔍 Starting to fetch Instagram accounts...');
+      if (isAuthenticated && user?.id) {
+        console.log('🔍 Starting to fetch Instagram accounts from database...');
         
         setLoading(true);
         try {
-          // Fetch Instagram accounts from API
-          const fetchedAccounts = await getUserInstagramAccounts(instagramAccessToken);
-          console.log('Instagram accounts fetched:', fetchedAccounts);
+          // Fetch Instagram accounts from database using Supabase
+          const response = await fetch(`/api/instagram/accounts?user_id=${user.id}`);
+          const data = await response.json();
           
-          if (fetchedAccounts && fetchedAccounts.length > 0) {
-            setInstagramAccounts(fetchedAccounts);
-            setSelectedAccount(fetchedAccounts[0].id);
-            setSelectedAccountName(fetchedAccounts[0].username || fetchedAccounts[0].name);
+          console.log('Instagram accounts fetched from database:', data);
+          
+          if (data && data.accounts && data.accounts.length > 0) {
+            const accounts = data.accounts;
+            setInstagramAccounts(accounts);
+            
+            // Find primary account or use first one
+            const primaryAccount = accounts.find(acc => acc.is_primary) || accounts[0];
+            setSelectedAccount(primaryAccount.instagram_account_id);
+            setSelectedAccountName(primaryAccount.username || primaryAccount.name);
           } else {
-            console.log('⚠️ No Instagram accounts found');
-            toast.error('No Instagram accounts found. Make sure you have Instagram accounts connected to your Facebook pages.');
+            console.log('⚠️ No Instagram accounts found in database');
+            toast.error('No Instagram accounts found. Please connect your Instagram accounts in Settings.');
           }
         } catch (error) {
-          console.error('❌ Error fetching Instagram accounts:', error);
+          console.error('❌ Error fetching Instagram accounts from database:', error);
           toast.error(`Failed to fetch Instagram accounts: ${error.message}`);
         } finally {
           setLoading(false);
@@ -93,13 +99,12 @@ export default function InstagramPage() {
       } else {
         console.log('⏸️ Not fetching Instagram accounts - missing requirements:');
         console.log('  - Authenticated:', isAuthenticated);
-        console.log('  - Instagram Access Token:', !!instagramAccessToken);
         console.log('  - User ID:', !!user?.id);
       }
     };
 
     fetchInstagramAccounts();
-  }, [isAuthenticated, instagramAccessToken, user?.id]);
+  }, [isAuthenticated, user?.id]);
 
   const checkTokenDebug = async () => {
     try {
@@ -374,10 +379,6 @@ export default function InstagramPage() {
         throw new Error("Please enter a message");
       }
 
-      if (!instagramAccessToken) {
-        throw new Error("Please connect your Instagram account first");
-      }
-
       if (mediaFiles.length === 0) {
         throw new Error("Please upload media for your Instagram post");
       }
@@ -389,11 +390,29 @@ export default function InstagramPage() {
       }
       
       // Find the selected account object
-      const instagramAccount = instagramAccounts.find((account) => account.id === selectedAccount);
+      const instagramAccount = instagramAccounts.find((account) => account.instagram_account_id === selectedAccount);
       
       if (!instagramAccount) {
         throw new Error("Selected Instagram account not found. Please refresh the page and try again.");
       }
+      
+      // Get posting details from database
+      const response = await fetch(`/api/instagram/posting-details?user_id=${user.id}&instagram_account_id=${selectedAccount}`);
+      const postingDetails = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(postingDetails.error || "Failed to get posting details");
+      }
+      
+      const { connectionType, pageAccessToken, instagramAccountId, instagramDirectToken } = postingDetails;
+      
+      // Handle Instagram-direct accounts
+      {/*if (connectionType === 'instagram_direct') {
+        throw new Error(
+          'Instagram Basic Display API does not support direct posting to Instagram feed. ' +
+          'Please use Instagram Business account via Facebook for posting capabilities.'
+        );
+      }*/}
       
       // Prepare media URLs and types based on post type
       let mediaUrls = [];
@@ -425,10 +444,10 @@ export default function InstagramPage() {
         
         // Schedule the post using Instagram API
         const result = await scheduleInstagramPost(
-          instagramAccount.pageAccessToken,
+          pageAccessToken,
           fullMessage,
           mediaType === 'carousel' ? mediaUrls : mediaUrls[0],
-          instagramAccount.id,
+          instagramAccountId,
           scheduledDateTime,
           postMediaType // Pass the media type to the API
         );
@@ -441,8 +460,8 @@ export default function InstagramPage() {
           status: "scheduled",
           has_image: true,
           media_type: postMediaType,
-          pageId: instagramAccount.pageId,
-          pageName: instagramAccount.pageName,
+          pageId: instagramAccountId,
+          pageName: instagramAccount.username,
           instagramContainerId: result.containerId
         });
         
@@ -458,10 +477,10 @@ export default function InstagramPage() {
       } else {
         // Post immediately
         const result = await postToInstagram(
-          instagramAccount.pageAccessToken,
+          pageAccessToken,
           fullMessage,
           mediaType === 'carousel' ? mediaUrls : mediaUrls[0],
-          instagramAccount.id,
+          instagramAccountId,
           postMediaType // Pass the media type to the API
         );
         
@@ -516,7 +535,7 @@ export default function InstagramPage() {
           </div>
         </div>
         
-        {!instagramAccessToken && (
+        {instagramAccounts.length === 0 && !loading && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -530,34 +549,6 @@ export default function InstagramPage() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2 mt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  console.log('Manually refreshing tokens...');
-                  if (refreshTokensFromDatabase) {
-                    refreshTokensFromDatabase();
-                    toast.info('Refreshing connection status...');
-                  }
-                }}
-              >
-                Refresh Connection
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={checkTokenDebug}
-              >
-                Debug Tokens
-              </Button>
-              
-            </div>
-            {debugInfo && (
-              <div className="mt-3 p-3 bg-gray-100 rounded text-left text-xs overflow-auto max-h-40">
-                <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -755,7 +746,7 @@ export default function InstagramPage() {
                       value={selectedAccount} 
                       onValueChange={(value) => {
                         setSelectedAccount(value);
-                        const account = instagramAccounts.find(acc => acc.id === value);
+                        const account = instagramAccounts.find(acc => acc.instagram_account_id === value);
                         if (account) {
                           setSelectedAccountName(account.username || account.name);
                         }
@@ -766,15 +757,40 @@ export default function InstagramPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {instagramAccounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
+                          <SelectItem key={account.instagram_account_id} value={account.instagram_account_id}>
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4" />
                               <span>{account.username || account.name}</span>
+                              {account.is_primary && <span className="text-xs text-blue-600">(Primary)</span>}
+                              {/*account.connection_type === 'instagram_direct' && (
+                                <span className="text-xs text-orange-600">(Personal)</span>
+                              )*/}
+                              {account.connection_type === 'facebook' && (
+                                <span className="text-xs text-green-600">(Business)</span>
+                              )}
                             </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    
+                    {/*{instagramAccounts.find(acc => acc.instagram_account_id === selectedAccount)?.connection_type === 'instagram_direct' && (
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                        <div className="flex">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm text-yellow-700">
+                              <strong>Personal Instagram Account:</strong> Instagram Basic Display API has limited posting capabilities. 
+                              For full posting features, connect your Instagram Business account via Facebook in <Link href="/settings" className="underline">Settings</Link>.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}*/}
                   </div>
                 )}
 

@@ -167,6 +167,7 @@ export function SupabaseProvider({ children }) {
       const pagesData = pages.map((page) => ({
         user_id: user.id,
         page_id: page.id,
+        facebook_account_id: page.facebook_account_id || page.id, // Fallback to page.id if facebook_account_id is null
         page_name: page.name,
         access_token: page.access_token,
         category: page.category || null,

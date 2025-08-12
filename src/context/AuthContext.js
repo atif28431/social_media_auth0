@@ -38,25 +38,96 @@ export function AuthProvider({ children }) {
           setSupabase(supabaseClient);
           console.log('Created Supabase client with user ID:', auth0User.sub);
           
-          // Store session in Supabase
+          // Store session in Supabase with retry logic for network issues
           try {
-            const { error } = await supabaseClient.from("user_sessions").upsert(
-              {
-                user_id: auth0User.sub,
-                auth_provider: "auth0",
-                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "user_id" }
-            );
+            const maxRetries = 3;
+            let retryCount = 0;
+            let lastError = null;
             
-            if (error) {
-              console.error("Error storing session:", error);
-            } else {
-              console.log("Session stored successfully for user:", auth0User.sub);
+            while (retryCount < maxRetries) {
+              try {
+                const { error } = await supabaseClient.from("user_sessions").upsert(
+                  {
+                    user_id: auth0User.sub,
+                    auth_provider: "auth0",
+                    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    updated_at: new Date().toISOString(),
+                  },
+                  { onConflict: "user_id" }
+                );
+                
+                if (error) {
+                  console.error("Error storing session:", error);
+                  lastError = error;
+                } else {
+                  console.log("Session stored successfully for user:", auth0User.sub);
+                  lastError = null;
+                  break;
+                }
+              } catch (networkError) {
+                console.error(`Network error on attempt ${retryCount + 1}:`, networkError);
+                lastError = networkError;
+                
+                if (retryCount < maxRetries - 1) {
+                  // Wait before retry with exponential backoff
+                  await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+                }
+              }
+              retryCount++;
+            }
+            
+            if (lastError) {
+              console.error("Failed to store session after retries:", lastError);
+              setTokenError("Network connection issue. Some features may be limited.");
+            }
+            
+            // Create/update user profile in users table with retry logic
+            try {
+              let userRetryCount = 0;
+              let userLastError = null;
+              
+              while (userRetryCount < maxRetries) {
+                try {
+                  const { error: userError } = await supabaseClient.from("users").upsert(
+                    {
+                      id: auth0User.sub,
+                      email: auth0User.email,
+                      username: auth0User.nickname || auth0User.email?.split('@')[0],
+                      full_name: auth0User.name,
+                      avatar_url: auth0User.picture,
+                      updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "id" }
+                  );
+                  
+                  if (userError) {
+                    console.error("Error creating/updating user profile:", userError);
+                    userLastError = userError;
+                  } else {
+                    console.log("User profile created/updated successfully for:", auth0User.sub);
+                    userLastError = null;
+                    break;
+                  }
+                } catch (networkError) {
+                  console.error(`User profile network error on attempt ${userRetryCount + 1}:`, networkError);
+                  userLastError = networkError;
+                  
+                  if (userRetryCount < maxRetries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, userRetryCount) * 1000));
+                  }
+                }
+                userRetryCount++;
+              }
+              
+              if (userLastError) {
+                console.error("Failed to update user profile after retries:", userLastError);
+              }
+            } catch (userError) {
+              console.error("User profile error:", userError);
             }
           } catch (sessionError) {
             console.error("Session storage error:", sessionError);
+            setTokenError("Network connection issue. Please check your internet connection.");
           }
         } else {
           setUser(null);
@@ -66,6 +137,7 @@ export function AuthProvider({ children }) {
         console.error("Error initializing auth:", error);
         setUser(null);
         setSupabase(createClient());
+        setTokenError("Failed to initialize authentication. Please refresh the page.");
       } finally {
         setLoading(false);
       }
@@ -146,16 +218,40 @@ export function AuthProvider({ children }) {
         updateData.youtube_token_expires_at = expiryDate.toISOString();
       }
 
-      const { error } = await supabase
-        .from("user_sessions")
-        .update(updateData)
-        .eq("user_id", user.id);
+      const maxRetries = 3;
+      let retryCount = 0;
+      let lastError = null;
 
-      if (error) {
-        console.error("Error updating tokens:", error);
-      } else {
-        console.log("Tokens updated successfully");
-        setTokenError(null); // Clear any previous errors
+      while (retryCount < maxRetries) {
+        try {
+          const { error } = await supabase
+            .from("user_sessions")
+            .update(updateData)
+            .eq("user_id", user.id);
+
+          if (error) {
+            console.error("Error updating tokens:", error);
+            lastError = error;
+          } else {
+            console.log("Tokens updated successfully");
+            setTokenError(null); // Clear any previous errors
+            lastError = null;
+            break;
+          }
+        } catch (networkError) {
+          console.error(`Token update network error on attempt ${retryCount + 1}:`, networkError);
+          lastError = networkError;
+          
+          if (retryCount < maxRetries - 1) {
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+          }
+        }
+        retryCount++;
+      }
+
+      if (lastError) {
+        console.error("Failed to update tokens after retries:", lastError);
+        setTokenError("Network connection issue. Token updates may be delayed.");
       }
     } catch (error) {
       console.error("Error updating tokens:", error);
@@ -209,12 +305,41 @@ export function AuthProvider({ children }) {
       try {
         console.log("Fetching tokens for user:", user.id);
         
-        // Get tokens from Supabase
-        const { data, error } = await supabase
-          .from("user_sessions")
-          .select("facebook_access_token, instagram_access_token, facebook_token_expires_at, instagram_token_expires_at, youtube_access_token, youtube_refresh_token, youtube_token_expires_at")
-          .eq("user_id", user.id)
-          .single();
+        // Get tokens from Supabase with retry logic for network issues
+        const maxRetries = 3;
+        let retryCount = 0;
+        let lastError = null;
+        let data = null;
+        let error = null;
+        
+        while (retryCount < maxRetries) {
+          try {
+            const result = await supabase
+              .from("user_sessions")
+              .select("facebook_access_token, instagram_access_token, facebook_token_expires_at, instagram_token_expires_at, youtube_access_token, youtube_refresh_token, youtube_token_expires_at")
+              .eq("user_id", user.id)
+              .single();
+              
+            data = result.data;
+            error = result.error;
+            lastError = null;
+            break;
+          } catch (networkError) {
+            console.error(`Token fetch network error on attempt ${retryCount + 1}:`, networkError);
+            lastError = networkError;
+            
+            if (retryCount < maxRetries - 1) {
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+            }
+          }
+          retryCount++;
+        }
+        
+        if (lastError) {
+          console.error("Failed to fetch tokens after retries:", lastError);
+          setTokenError("Network connection issue. Some social media features may be unavailable.");
+          return;
+        }
 
         if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
           console.error("Error fetching tokens:", error);
@@ -543,6 +668,19 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Check if Supabase connection is available
+  const checkSupabaseConnection = async () => {
+    if (!supabase) return false;
+    
+    try {
+      const { error } = await supabase.from('user_sessions').select('user_id').limit(1);
+      return !error;
+    } catch (error) {
+      console.error('Supabase connection check failed:', error);
+      return false;
+    }
+  };
+
   const value = {
     user,
     loading: loading || isLoading,
@@ -558,6 +696,7 @@ export function AuthProvider({ children }) {
     tokenError, // Expose token error state
     refreshYoutubeToken, // Expose YouTube refresh function
     refreshTokensFromDatabase, // Expose refresh function for settings page
+    checkSupabaseConnection, // Function to check connection status
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

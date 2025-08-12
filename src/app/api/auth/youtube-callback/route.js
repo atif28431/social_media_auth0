@@ -126,10 +126,11 @@ export async function GET(request) {
     console.log('Session updated successfully');
     
     // Insert the YouTube channel into the youtube_accounts table
-    // First, let's try to insert with the unique constraint on youtube_channel_id
-    const { data: existingChannel, error: checkError } = await supabase
+    // Allow multiple channels per user - check if this specific channel already exists for this user
+    const { data: existingUserChannel, error: checkError } = await supabase
       .from('youtube_accounts')
-      .select('id, user_id')
+      .select('id')
+      .eq('user_id', userId)
       .eq('youtube_channel_id', channel.id)
       .single();
     
@@ -139,12 +140,11 @@ export async function GET(request) {
     
     let channelInsertError = null;
     
-    if (existingChannel) {
-      // Channel exists, update it
+    if (existingUserChannel) {
+      // Channel already exists for this user, update it
       const { error: updateError } = await supabase
         .from('youtube_accounts')
         .update({
-          user_id: userId,
           channel_name: channel.snippet.title,
           channel_description: channel.snippet.description,
           profile_picture_url: channel.snippet.thumbnails?.default?.url,
@@ -153,6 +153,7 @@ export async function GET(request) {
           token_expires_at: expiresAt,
           updated_at: new Date().toISOString(),
         })
+        .eq('user_id', userId)
         .eq('youtube_channel_id', channel.id);
       
       channelInsertError = updateError;
@@ -160,7 +161,7 @@ export async function GET(request) {
         console.log('YouTube channel updated successfully');
       }
     } else {
-      // Channel doesn't exist, insert it
+      // Channel doesn't exist for this user, insert it as a new channel
       const { error: insertError } = await supabase
         .from('youtube_accounts')
         .insert({

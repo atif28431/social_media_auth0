@@ -1,0 +1,2 @@
+Social_media = sbp_27bd41a390a6603e1822280d2bbd91af2c978d19
+Email AI = sbp_da6492ad71524e673c2b073f33a6512ab65bd619

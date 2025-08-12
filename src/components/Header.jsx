@@ -128,7 +128,7 @@ export default function Header() {
                 
                 <DropdownMenuGroup className="py-2">
                   <DropdownMenuItem asChild>
-                    <Link href="/settings" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                    <Link href="/profile" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                       <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800">
                         <User className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                       </div>

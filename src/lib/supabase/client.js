@@ -15,6 +15,21 @@ export const createClient = (userId = null) => {
       global: {
         headers,
       },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
+      db: {
+        schema: 'public',
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
     }
   );
 };

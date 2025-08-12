@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Facebook, Instagram, Twitter, Linkedin, Settings, User, FileText, Plus, Youtube, Shield, Scale } from "lucide-react";
+import { Trash, Facebook, Instagram, Twitter, Linkedin, Settings, User, FileText, Plus, Youtube, Shield, Scale } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
@@ -16,7 +16,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated && user && supabase) {
+    if (isAuthenticated && user && supabase && user.id) {
+      console.log('Fetching connected accounts for user:', user.id);
       fetchConnectedAccounts();
     }
   }, [isAuthenticated, user, supabase]);
@@ -111,39 +112,89 @@ export default function SettingsPage() {
     }
     
     try {
-      const { data, error } = await supabase
-        .from("user_sessions")
-        .select("facebook_access_token, instagram_access_token, youtube_access_token")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error("Error fetching connected accounts:", error);
-        return;
-      }
+      // Fetch Facebook accounts with their pages hierarchically
+      const [facebookAccounts, instagramAccounts, youtubeChannels] = await Promise.all([
+        supabase
+          .from("facebook_accounts")
+          .select(`
+            *,
+            facebook_pages(*)
+          `)
+          .eq("user_id", user.id)
+          .eq("is_active", true),
+        supabase
+           .from("instagram_accounts")
+          .select("id, instagram_account_id, username, name, profile_picture_url, page_name, created_at, is_primary")
+          .eq("user_id", user.id),
+        supabase
+          .from("youtube_accounts")
+          .select("id, youtube_channel_id, channel_name, channel_description, profile_picture_url, created_at")
+          .eq("user_id", user.id)
+      ]);
 
       const accounts = [];
-      if (data?.facebook_access_token) {
-        accounts.push({ platform: 'facebook', name: 'Facebook', icon: Facebook, connected: true, color: 'bg-blue-500' });
-      }
-      if (data?.instagram_access_token) {
-        accounts.push({ platform: 'instagram', name: 'Instagram', icon: Instagram, connected: true, color: 'bg-pink-500' });
-      }
-      if (data?.twitter_access_token) {
-        accounts.push({ platform: 'twitter', name: 'Twitter', icon: Twitter, connected: true, color: 'bg-sky-500' });
-      }
-      if (data?.linkedin_access_token) {
-        accounts.push({ platform: 'linkedin', name: 'LinkedIn', icon: Linkedin, connected: true, color: 'bg-blue-700' });
-      }
-      // Use AuthContext youtubeAccessToken instead of database query for consistency
-      if (youtubeAccessToken) {
-        accounts.push({ platform: 'youtube', name: 'YouTube', icon: Youtube, connected: true, color: 'bg-red-500' });
+
+      // Add Facebook accounts with their pages
+      if (facebookAccounts.data && facebookAccounts.data.length > 0) {
+        facebookAccounts.data.forEach(account => {
+          accounts.push({
+            id: account.id,
+            platform: 'facebook',
+            name: 'Facebook',
+            displayName: account.facebook_user_name,
+            icon: Facebook,
+            color: 'bg-blue-500',
+            connected: true,
+            accountId: account.facebook_user_id,
+            type: 'main_account',
+            isPrimary: account.is_primary,
+            pages: account.facebook_pages || []
+          });
+        });
       }
 
+      // Add Instagram accounts
+      if (instagramAccounts.data && instagramAccounts.data.length > 0) {
+        instagramAccounts.data.forEach(account => {
+          accounts.push({
+            id: account.id,
+            platform: 'instagram',
+            name: 'Instagram',
+            displayName: account.username || account.name,
+            icon: Instagram,
+            color: 'bg-pink-500',
+            connected: true,
+            accountId: account.instagram_account_id,
+            profilePicture: account.profile_picture_url,
+            type: 'account',
+            isPrimary: account.is_primary
+          });
+        });
+      }
+
+      // Add YouTube channels
+      if (youtubeChannels.data && youtubeChannels.data.length > 0) {
+        youtubeChannels.data.forEach(channel => {
+          accounts.push({
+            id: channel.id,
+            platform: 'youtube',
+            name: 'YouTube',
+            displayName: channel.channel_name,
+            description: channel.channel_description,
+            icon: Youtube,
+            color: 'bg-red-500',
+            connected: true,
+            accountId: channel.youtube_channel_id,
+            profilePicture: channel.profile_picture_url,
+            type: 'channel'
+          });
+        });
+      }
 
       setConnectedAccounts(accounts);
     } catch (error) {
       console.error("Error fetching connected accounts:", error);
+      toast.error("Failed to load connected accounts");
     }
   };
 
@@ -164,7 +215,7 @@ export default function SettingsPage() {
     }
   };
 
-  const connectInstagram = () => {
+  const connectInstagramFacebook = () => {
     const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
     const redirectUri = `${window.location.origin}/instagram-callback`;
     const scope = "instagram_basic,pages_show_list,instagram_manage_comments,instagram_content_publish,instagram_manage_insights";
@@ -176,9 +227,112 @@ export default function SettingsPage() {
     window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&auth_type=rerequest&state=${state}`;
   };
 
+  const connectInstagramDirect = async () => {
+    try {
+      if (!user?.id) {
+        toast.error('User not authenticated');
+        return;
+      }
+
+      // Check if Instagram App ID is configured
+      if (!process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID) {
+        toast.error('Instagram Basic Display API not configured');
+        return;
+      }
+
+      // Open Instagram Basic Display OAuth in popup
+      const popup = window.open(
+        '',
+        'instagram-direct-auth',
+        'width=600,height=700,scrollbars=yes,resizable=yes'
+      );
+
+      // Generate auth URL
+      const response = await fetch(`/api/instagram/direct-auth?user_id=${user.id}`);
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to generate auth URL');
+      }
+
+      if (popup) {
+        popup.location.href = data.auth_url;
+      }
+
+      // Listen for popup completion
+      const handleMessage = async (event) => {
+        if (event.origin !== window.location.origin) return;
+        
+        if (event.data.success) {
+          toast.success('Instagram account connected successfully!');
+          await fetchConnectedAccounts();
+          if (refreshTokensFromDatabase) {
+            await refreshTokensFromDatabase();
+          }
+        } else if (event.data.error) {
+          toast.error(`Failed to connect Instagram: ${event.data.error}`);
+        }
+        
+        window.removeEventListener('message', handleMessage);
+      };
+
+      window.addEventListener('message', handleMessage);
+
+    } catch (error) {
+      console.error('Instagram direct connection error:', error);
+      toast.error(error.message || 'Failed to connect Instagram account');
+    }
+  };
+
+  const connectInstagram = () => {
+    // Show modal with connection options
+    const modal = document.createElement('div');
+    modal.innerHTML = `
+      <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 2rem; border-radius: 8px; max-width: 400px; width: 90%; text-align: center;">
+          <h3 style="margin-bottom: 1rem;">Connect Instagram Account</h3>
+          <p style="margin-bottom: 1.5rem; color: #666;">Choose how you want to connect your Instagram account:</p>
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <button id="facebook-method" style="padding: 1rem; background: #1877F2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Connect via Facebook (Business Accounts)
+            </button>
+            <button id="direct-method" style="padding: 1rem; background: #E4405F; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Connect via Instagram (Personal Accounts)
+            </button>
+            <button id="cancel-method" style="padding: 0.5rem; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.querySelector('#facebook-method').onclick = () => {
+      document.body.removeChild(modal);
+      connectInstagramFacebook();
+    };
+    
+    modal.querySelector('#direct-method').onclick = () => {
+      document.body.removeChild(modal);
+      connectInstagramDirect();
+    };
+    
+    modal.querySelector('#cancel-method').onclick = () => {
+      document.body.removeChild(modal);
+    };
+    
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    };
+  };
+
   
 
-  const disconnectAccount = async (platform) => {
+  const disconnectAccount = async (platform, accountId) => {
     if (!supabase) {
       toast.error('Database not available. Please refresh the page and try again.');
       return;
@@ -186,37 +340,56 @@ export default function SettingsPage() {
     
     setLoading(true);
     try {
-      const updateData = {};
-      
-      // Handle YouTube disconnect differently
-      if (platform === 'youtube') {
-        updateData.youtube_access_token = null;
-        updateData.youtube_refresh_token = null;
-        updateData.youtube_token_expires_at = null;
-      } else {
-        updateData[`${platform}_access_token`] = null;
+      let tableName;
+      switch (platform) {
+        case 'facebook':
+          tableName = 'facebook_pages';
+          break;
+        case 'instagram':
+          tableName = 'instagram_accounts';
+          break;
+        case 'youtube':
+          tableName = 'youtube_accounts';
+          break;
+        default:
+          throw new Error('Invalid platform');
       }
-      
-      updateData.updated_at = new Date().toISOString();
 
       const { error } = await supabase
-        .from("user_sessions")
-        .update(updateData)
+        .from(tableName)
+        .delete()
+        .eq("id", accountId)
         .eq("user_id", user.id);
 
       if (error) {
         throw error;
       }
 
-      // Remove from localStorage
-      if (platform === 'youtube') {
-        localStorage.removeItem('yt_access_token');
-        localStorage.removeItem('yt_refresh_token');
-      } else {
-        localStorage.removeItem(`${platform.substring(0, 2)}_access_token`);
+      // If no more accounts of this type, also clear from user_sessions for backward compatibility
+      const { data: remainingAccounts } = await supabase
+        .from(tableName)
+        .select('id')
+        .eq("user_id", user.id)
+        .limit(1);
+
+      if (!remainingAccounts || remainingAccounts.length === 0) {
+        if (platform === 'youtube') {
+          await supabase
+            .from("user_sessions")
+            .update({
+              youtube_access_token: null,
+              youtube_refresh_token: null,
+              youtube_token_expires_at: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq("user_id", user.id);
+          
+          localStorage.removeItem('yt_access_token');
+          localStorage.removeItem('yt_refresh_token');
+        }
       }
       
-      toast.success(`${platform.charAt(0).toUpperCase() + platform.slice(1)} disconnected successfully`);
+      toast.success(`${platform.charAt(0).toUpperCase() + platform.slice(1)} account disconnected successfully`);
       fetchConnectedAccounts();
       // Refresh AuthContext to update connection status immediately
       if (refreshTokensFromDatabase) {
@@ -224,7 +397,53 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error(`Error disconnecting ${platform}:`, error);
-      toast.error(`Failed to disconnect ${platform}`);
+      toast.error(`Failed to disconnect ${platform} account`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setPrimaryAccount = async (platform, accountId) => {
+    if (!supabase) {
+      toast.error('Database not available. Please refresh the page and try again.');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      let tableName;
+      switch (platform) {
+        case 'facebook':
+          tableName = 'facebook_accounts';
+          break;
+        case 'instagram':
+          tableName = 'instagram_accounts';
+          break;
+        default:
+          throw new Error('Invalid platform');
+      }
+
+      // First, set all accounts/pages for this platform to non-primary
+      const { error: resetError } = await supabase
+        .from(tableName)
+        .update({ is_primary: false })
+        .eq('user_id', user.id);
+
+      if (resetError) throw resetError;
+
+      // Then, set the selected account/page as primary
+      const { error: setError } = await supabase
+        .from(tableName)
+        .update({ is_primary: true })
+        .eq('id', accountId);
+
+      if (setError) throw setError;
+
+      toast.success('Primary account set successfully');
+      fetchConnectedAccounts();
+    } catch (error) {
+      console.error('Error setting primary account:', error);
+      toast.error('Failed to set primary account');
     } finally {
       setLoading(false);
     }
@@ -248,25 +467,7 @@ export default function SettingsPage() {
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">Settings</h1>
         <p className="text-muted-foreground">Manage your account and social media connections</p>
       </div>
-
-      <Tabs defaultValue="accounts" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 gap-1 sm:gap-0 mb-4 sm:mb-6 sticky top-0 bg-background z-10">
-          <TabsTrigger value="accounts" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-1 sm:py-2">
-            <Settings className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="sm:inline">Social Accounts</span><span className="inline sm:hidden">Accounts</span>
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-1 sm:py-2">
-            <User className="h-3 w-3 sm:h-4 sm:w-4" /> Profile
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-1 sm:py-2">
-            <FileText className="h-3 w-3 sm:h-4 sm:w-4" /> Templates
-          </TabsTrigger>
-          <TabsTrigger value="legal" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-1 sm:py-2">
-            <Scale className="h-3 w-3 sm:h-4 sm:w-4" /> Legal
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="accounts" className="space-y-6 w-full">
-          <Card className="w-full">
+      <div><Card className="w-full">
             <CardHeader>
               <CardTitle>Connected Social Media Accounts</CardTitle>
               <CardDescription>
@@ -274,218 +475,215 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+              <div className="space-y-6">
                 {socialPlatforms.map((platform) => {
-                  // Check connection status from AuthContext for YouTube, database for others
-                  let isConnected;
-                  if (platform.platform === 'youtube') {
-                    isConnected = !!youtubeAccessToken;
-                  } else {
-                    isConnected = connectedAccounts.some(acc => acc.platform === platform.platform);
-                  }
+                  const platformAccounts = connectedAccounts.filter(acc => acc.platform === platform.platform);
+                  const isConnected = platformAccounts.length > 0;
                   const IconComponent = platform.icon;
                   
                   return (
-                    <div key={platform.platform} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 border rounded-lg gap-3 sm:gap-0">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${platform.color}`}>
-                          <IconComponent className="h-5 w-5 text-white" />
+                    <div key={platform.platform} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${platform.color}`}>
+                            <IconComponent className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium">{platform.name}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {platformAccounts.length} account{platformAccounts.length !== 1 ? 's' : ''} connected
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-medium">{platform.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {isConnected ? 'Connected' : 'Not connected'}
-                          </p>
-                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={platform.connectFn}
+                          disabled={loading}
+                          className="w-auto"
+                        >
+                          Add Another
+                        </Button>
                       </div>
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        {isConnected ? (
-                          <>
-                            <Badge variant="secondary" className="text-green-600 hidden sm:inline-flex">
-                              Connected
-                            </Badge>
+                      
+                      {platformAccounts.length > 0 && (
+                        <div className="space-y-3">
+                          {platform.platform === 'facebook' ? (
+                            // Facebook hierarchical display
+                            platformAccounts.map((account) => (
+                              <div key={account.id} className="border rounded-lg bg-muted/20">
+                                {/* Main Facebook Account */}
+                                <div className="flex items-center justify-between p-3 border-b">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+                                      <Facebook className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                    <h4 className="font-medium text-sm">{account.displayName}</h4>
+                                    <div className="text-xs text-muted-foreground">
+                                      Main Account {account.isPrimary && <Badge variant="secondary" className="ml-1">Primary</Badge>}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground font-mono">
+                                      {account.accountId}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {!account.isPrimary ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setPrimaryAccount('facebook', account.id)}
+                                      disabled={loading}
+                                      className="text-green-600 border-green-600 hover:bg-green-50"
+                                    >
+                                      Set Primary
+                                    </Button>
+                                  ) : (
+                                    <Badge variant="default" className="bg-green-500 text-white">
+                                      Primary
+                                    </Badge>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => disconnectAccount('facebook', account.id)}
+                                    disabled={loading}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash />
+                                  </Button>
+                                </div>
+                                </div>
+                                
+                                {/* Pages under this account */}
+                                {account.pages && account.pages.length > 0 && (
+                                  <div className="space-y-2 p-3">
+                                    <p className="text-xs font-medium text-muted-foreground mb-2">Pages ({account.pages.length})</p>
+                                    {account.pages.map((page) => (
+                                      <div key={page.id} className="flex items-center justify-between p-2 ml-4 border-l-2 border-blue-200 rounded-r-lg">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center">
+                                            <FileText className="w-3 h-3 text-blue-600" />
+                                          </div>
+                                          <div>
+                                            <h5 className="text-sm font-medium">{page.page_name}</h5>
+                                            <p className="text-xs text-muted-foreground">{page.category}</p>
+                                            {page.is_primary && <Badge variant="secondary" className="text-xs">Primary Page</Badge>}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {!page.is_primary ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => setPrimaryAccount('facebook', page.id)}
+                                              disabled={loading}
+                                              className="text-green-600 border-green-600 hover:bg-green-50 text-xs h-7"
+                                            >
+                                              Set Primary
+                                            </Button>
+                                          ) : (
+                                            <Badge variant="default" className="bg-green-500 text-white text-xs">
+                                              Primary
+                                            </Badge>
+                                          )}
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => disconnectAccount('facebook', page.id)}
+                                            disabled={loading}
+                                            className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2 text-xs"
+                                          >
+                                            <Trash />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            // Other platforms (flat display)
+                            platformAccounts.map((account) => (
+                              <div key={account.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                                <div className="flex items-center gap-3">
+                                  {account.profilePicture && (
+                                    <img 
+                                      src={account.profilePicture} 
+                                      alt={account.displayName}
+                                      className="w-10 h-10 rounded-full object-cover"
+                                      onError={(e) => e.target.style.display = 'none'}
+                                    />
+                                  )}
+                                  <div>
+                                    <h4 className="font-medium text-sm">{account.displayName}</h4>
+                                    {account.category && (
+                                      <p className="text-xs text-muted-foreground">{account.category}</p>
+                                    )}
+                                    {account.description && (
+                                      <p className="text-xs text-muted-foreground line-clamp-1">{account.description}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground font-mono">
+                                      {account.accountId}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {platform.platform !== 'youtube' && !account.isPrimary ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setPrimaryAccount(platform.platform, account.id)}
+                                      disabled={loading}
+                                      className="text-green-600 border-green-600 hover:bg-green-50"
+                                    >
+                                      Set Primary
+                                    </Button>
+                                  ) : platform.platform !== 'youtube' && account.isPrimary ? (
+                                    <Badge variant="default" className="bg-green-500 text-white">
+                                      Primary
+                                    </Badge>
+                                  ) : null}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => disconnectAccount(platform.platform, account.id)}
+                                    disabled={loading}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                      
+                      {platformAccounts.length === 0 && (
+                          <div className="text-center py-6 border-t">
+                            <p className="text-sm text-muted-foreground mb-3">
+                              No {platform.name} accounts connected
+                            </p>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => disconnectAccount(platform.platform)}
+                              onClick={platform.connectFn}
                               disabled={loading}
-                              className="w-full sm:w-auto"
                             >
-                              Disconnect
+                              Connect {platform.name}
                             </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={platform.connectFn}
-                            disabled={loading}
-                            className="w-full sm:w-auto"
-                          >
-                            Connect
-                          </Button>
+                          </div>
                         )}
-                      </div>
                     </div>
                   );
                 })}
               </div>
             </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="profile" className="space-y-6 w-full">
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle>Account Information</CardTitle>
-              <CardDescription>
-                Manage your account details and preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3 border rounded-lg">
-                  <label className="text-sm font-medium">Email</label>
-                  <p className="text-sm text-muted-foreground mt-1 break-all">{user?.email || 'Not available'}</p>
-                </div>
-                <div className="p-3 border rounded-lg">
-                  <label className="text-sm font-medium">Name</label>
-                  <p className="text-sm text-muted-foreground mt-1">{user?.name || 'Not available'}</p>
-                </div>
-                <div className="p-3 border rounded-lg">
-                  <label className="text-sm font-medium">User ID</label>
-                  <p className="text-sm text-muted-foreground mt-1 font-mono text-xs break-all">{user?.id || 'Not available'}</p>
-                </div>
-                <div className="p-3 border rounded-lg">
-                  <label className="text-sm font-medium">Account Type</label>
-                  <p className="text-sm text-muted-foreground mt-1">Free Plan</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-
-
-        <TabsContent value="templates" className="space-y-6 w-full">
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle>Post Templates</CardTitle>
-              <CardDescription>
-                Create reusable templates for your social media posts
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-6 sm:py-8">
-                <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
-                <h3 className="text-base sm:text-lg font-medium mb-2">Templates Coming Soon</h3>
-                <p className="text-muted-foreground mb-4 text-sm sm:text-base px-2 sm:px-0">
-                  Create and save post templates for Instagram and Facebook to speed up your content creation.
-                </p>
-                <Button disabled className="w-full sm:w-auto">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Template
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="legal" className="space-y-6 w-full">
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Scale className="h-5 w-5" />
-                Legal Information
-              </CardTitle>
-              <CardDescription>
-                Review our legal documents and policies
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Privacy Policy Card */}
-                <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold mb-2">Privacy Policy</h3>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Learn how we collect, use, and protect your personal information when you use our services.
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-                          <Link href="/privacy">
-                            View Privacy Policy
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Terms & Conditions Card */}
-                <div className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold mb-2">Terms & Conditions</h3>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Review the terms of service that govern your use of our platform and services.
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-                          <Link href="/terms">
-                            View Terms & Conditions
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contact Information */}
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  Legal Questions?
-                </h4>
-                <p className="text-sm text-muted-foreground mb-3">
-                  If you have any questions about our privacy policy, terms of service, or any legal matters, please contact us:
-                </p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Email:</span>
-                    <a href="mailto:contact.ansari@gmail.com" className="text-primary hover:underline">
-                      contact.ansari@gmail.com
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Phone:</span>
-                    <span className="text-muted-foreground">+91 9820313746</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Location:</span>
-                    <span className="text-muted-foreground">Mumbai, India</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Last Updated Info */}
-              <div className="text-center py-4 border-t">
-                <p className="text-xs text-muted-foreground">
-                  Last updated: July 16, 2025 • Governed by the laws of India
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          </Card></div>
+      
     </div>
   );
 }

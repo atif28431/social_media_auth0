@@ -104,6 +104,7 @@ export async function postToInstagram(pageAccessToken, caption, mediaUrl, instag
     if (mediaType === 'video') {
       containerUrl = `https://graph.facebook.com/${instagramAccountId}/media?media_type=REELS&video_url=${encodeURIComponent(mediaUrl)}&caption=${encodeURIComponent(caption)}&access_token=${pageAccessToken}`;
     } else if (mediaType === 'story_image') {
+      console.log("Token being used:", pageAccessToken);
       containerUrl = `https://graph.facebook.com/${instagramAccountId}/media?media_type=STORIES&image_url=${encodeURIComponent(mediaUrl)}&access_token=${pageAccessToken}`;
     } else if (mediaType === 'story_video') {
       containerUrl = `https://graph.facebook.com/${instagramAccountId}/media?media_type=STORIES&video_url=${encodeURIComponent(mediaUrl)}&access_token=${pageAccessToken}`;
@@ -500,6 +501,7 @@ async function scheduleCarouselForInstagram(pageAccessToken, caption, mediaUrls,
 export async function publishInstagramContainer(pageAccessToken, containerId) {
   try {
     if (!pageAccessToken) {
+
       throw new Error("No page access token provided. Please reconnect your Instagram account.");
     }
     

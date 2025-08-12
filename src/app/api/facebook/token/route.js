@@ -94,16 +94,23 @@ export async function POST(request) {
         category: page.category || null,
       }));
 
-      // First delete existing pages to avoid duplicates
-      await supabase.from("facebook_pages").delete().eq("user_id", user_id);
+      // Insert only new pages to avoid duplicates
+      const existingPages = await supabase
+        .from('facebook_pages')
+        .select('page_id')
+        .eq('user_id', user_id);
 
-      // Then insert the new pages
-      const { error: pagesError } = await supabase
-        .from("facebook_pages")
-        .insert(pagesForDb);
+      const existingPageIds = existingPages.data?.map(p => p.page_id) || [];
+      const newPages = pagesForDb.filter(page => !existingPageIds.includes(page.page_id));
 
-      if (pagesError) {
-        console.error("Error saving Facebook pages:", pagesError);
+      if (newPages.length > 0) {
+        const { error: pagesError } = await supabase
+          .from("facebook_pages")
+          .insert(newPages);
+
+        if (pagesError) {
+          console.error("Error saving Facebook pages:", pagesError);
+        }
       }
     }
 
